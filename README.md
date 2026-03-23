@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.png">
+    <img src="assets/logo-light.png" alt="nullbot" width="200">
+  </picture>
+</p>
+
 # nullbot-dist
 
 Distribution package for **nullbot** — fleet observer that detects infrastructure problems and coordinates fixes through [Hiveram](https://hiveram.com). Ships with **chainwatch** policy gate because an unguarded agent is not a feature.
