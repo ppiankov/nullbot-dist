@@ -308,6 +308,7 @@ setup_enforcement() {
     $sudo_prefix cp "$nullbot_svc" "${systemd_dir}/nullbot.service"
     $sudo_prefix cp "$enforce_svc" "${systemd_dir}/chainwatch-enforce.service"
     info "  Installed nullbot.service and chainwatch-enforce.service"
+    info "  chainwatch-enforce.service launches nullbot under seccomp enforcement"
 
     # Install logrotate config
     if [ -d /etc/logrotate.d ]; then
@@ -318,10 +319,10 @@ setup_enforcement() {
     # Reload systemd
     $sudo_prefix systemctl daemon-reload
 
-    # Enable services (don't start yet — nullbot config may not be complete)
-    $sudo_prefix systemctl enable nullbot.service 2>/dev/null || true
+    # Enable enforcement service (it launches nullbot as a child)
+    # nullbot.service is available for standalone use without enforcement
     $sudo_prefix systemctl enable chainwatch-enforce.service 2>/dev/null || true
-    info "  Services enabled (start with: systemctl start nullbot)"
+    info "  Services enabled (start with: systemctl start chainwatch-enforce)"
 
     # Clean up temp files if used
     [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
@@ -415,9 +416,9 @@ verify() {
     echo ""
     if $ok; then
         info "Installation complete."
-        if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled nullbot.service &>/dev/null; then
-            info "Start services: systemctl start nullbot"
-            info "Enforcement starts automatically with nullbot."
+        if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled chainwatch-enforce.service &>/dev/null; then
+            info "Start with enforcement: systemctl start chainwatch-enforce"
+            info "Start without enforcement: systemctl start nullbot"
         else
             info "Open a new terminal, then run: nullbot pull --dry-run"
         fi

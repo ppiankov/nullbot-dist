@@ -164,8 +164,8 @@ Runbooks are embedded in the nullbot binary. No separate download needed.
 
 On Linux hosts with kernel ≥5.8 and BTF support, the installer automatically sets up eBPF observation and seccomp enforcement via systemd:
 
-- **`nullbot.service`** — runs the nullbot daemon
-- **`chainwatch-enforce.service`** — attaches eBPF tracepoints to the nullbot process tree and applies seccomp filters using the `nullbot-enforce` containment profile
+- **`chainwatch-enforce.service`** — launches nullbot under seccomp enforcement. The enforcer installs a seccomp-bpf filter, then execs nullbot as a child process. The child inherits the filter — blocked syscalls return EPERM. An eBPF sensor observes the child's PID tree for audit correlation
+- **`nullbot.service`** — runs nullbot standalone without kernel enforcement (userspace policy gate still applies)
 
 The `nullbot-enforce` profile blocks 35 syscalls across 5 groups:
 
@@ -180,11 +180,14 @@ The `nullbot-enforce` profile blocks 35 syscalls across 5 groups:
 The enforcement service binds to the nullbot lifecycle — it starts and stops with nullbot. If eBPF is unavailable (containers, old kernels), the installer skips enforcement with a warning. Audit log at `/var/log/chainwatch/enforce.jsonl` with 14-day logrotate.
 
 ```bash
+# Start nullbot under enforcement (seccomp + eBPF)
+systemctl start chainwatch-enforce
+
+# Or start nullbot standalone (userspace policy only)
+systemctl start nullbot
+
 # Check enforcement status
 systemctl status chainwatch-enforce
-
-# Start both services
-systemctl start nullbot
 
 # View denial audit log
 tail -f /var/log/chainwatch/enforce.jsonl

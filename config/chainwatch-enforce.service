@@ -1,17 +1,21 @@
 [Unit]
-Description=chainwatch eBPF/seccomp enforcement for nullbot
+Description=nullbot under chainwatch seccomp/eBPF enforcement
 Documentation=https://github.com/ppiankov/nullbot-dist
-After=nullbot.service
-BindsTo=nullbot.service
+After=network-online.target
+Wants=network-online.target
 ConditionPathExists=/sys/kernel/btf/vmlinux
 
 [Service]
 Type=simple
-ExecStartPre=/bin/bash -c 'systemctl show nullbot.service --property=MainPID --value > /run/nullbot.pid'
-ExecStart=/bin/bash -c 'exec /usr/local/bin/chainwatch enforce --pid $(cat /run/nullbot.pid) --profile nullbot-enforce --fallback --audit-log /var/log/chainwatch/enforce.jsonl'
-ExecStartPost=/bin/rm -f /run/nullbot.pid
+ExecStart=/usr/local/bin/chainwatch enforce \
+    --profile nullbot-enforce \
+    --fallback \
+    --audit-log /var/log/chainwatch/enforce.jsonl \
+    -- /usr/local/bin/nullbot daemon
 Restart=on-failure
-RestartSec=10
+RestartSec=30
+EnvironmentFile=-/root/.workledger/api-key.env
+EnvironmentFile=-/root/.nullbot/groq.env
 
 # eBPF requires elevated capabilities
 AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE
@@ -20,8 +24,9 @@ CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_DAC_READ_SEARCH
 # Security hardening
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/log/chainwatch /sys/fs/bpf /run
+ReadWritePaths=/var/log/chainwatch /sys/fs/bpf /tmp /root/.nullbot/state
 PrivateTmp=true
+WorkingDirectory=/tmp
 
 [Install]
 WantedBy=multi-user.target
