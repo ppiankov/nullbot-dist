@@ -13,6 +13,9 @@ Pre-built binaries and an install script that bootstraps any workstation with:
        │                      │                      │
   43 runbooks          allow/deny/approve      dedup + claims
   detect problems      enforce policy          one fix, not fifty
+                              │
+                     eBPF + seccomp (Linux)
+                     kernel-level containment
 ```
 
 ## What this is NOT
@@ -33,7 +36,8 @@ The installer will:
 2. Install nullbot (fleet observer)
 3. Configure Hiveram connection (API URL + key)
 4. Optionally configure Groq API key for LLM-assisted observation
-5. Verify everything works
+5. **On Linux**: set up eBPF/seccomp kernel-level enforcement (automatic)
+6. Verify everything works
 
 ## Manual install
 
@@ -155,6 +159,38 @@ Runbooks are embedded in the nullbot binary. No separate download needed.
 |---------|----------------|
 | vaultspectre | HashiCorp Vault seal status, policy gaps |
 | dnsspectre | Dangling records, subdomain takeover risk |
+
+## Kernel-level enforcement (Linux)
+
+On Linux hosts with kernel ≥5.8 and BTF support, the installer automatically sets up eBPF observation and seccomp enforcement via systemd:
+
+- **`nullbot.service`** — runs the nullbot daemon
+- **`chainwatch-enforce.service`** — attaches eBPF tracepoints to the nullbot process tree and applies seccomp filters using the `nullbot-enforce` containment profile
+
+The `nullbot-enforce` profile blocks 35 syscalls across 5 groups:
+
+| Group | What it blocks | Examples |
+|-------|---------------|----------|
+| baseline | Dangerous system calls | mount, ptrace, reboot |
+| privilege_escalation | UID/GID changes | setuid, setgid, capset |
+| file_mutation | Destructive file operations | unlink, rename, chmod, truncate |
+| mount_admin | Kernel module and mount operations | init_module, pivot_root |
+| network_egress | Raw outbound connections | connect, sendto, socket |
+
+The enforcement service binds to the nullbot lifecycle — it starts and stops with nullbot. If eBPF is unavailable (containers, old kernels), the installer skips enforcement with a warning. Audit log at `/var/log/chainwatch/enforce.jsonl` with 14-day logrotate.
+
+```bash
+# Check enforcement status
+systemctl status chainwatch-enforce
+
+# Start both services
+systemctl start nullbot
+
+# View denial audit log
+tail -f /var/log/chainwatch/enforce.jsonl
+```
+
+macOS does not support eBPF — enforcement is skipped silently. The userspace policy gate (chainwatch) still applies on all platforms.
 
 ## Platforms
 
