@@ -8,7 +8,7 @@ ConditionPathExists=/sys/kernel/btf/vmlinux
 [Service]
 Type=simple
 ExecStartPre=/bin/bash -c 'systemctl show nullbot.service --property=MainPID --value > /run/nullbot.pid'
-ExecStart=/bin/bash -c 'exec /usr/local/bin/chainwatch enforce --pid $(cat /run/nullbot.pid) --profile clawbot --fallback --audit-log /var/log/chainwatch/enforce.jsonl'
+ExecStart=/bin/bash -c 'exec /usr/local/bin/chainwatch enforce --pid $(cat /run/nullbot.pid) --profile nullbot-enforce --fallback --audit-log /var/log/chainwatch/enforce.jsonl'
 ExecStartPost=/bin/rm -f /run/nullbot.pid
 Restart=on-failure
 RestartSec=10
