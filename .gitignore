@@ -1,0 +1,5 @@
+.DS_Store
+CLAUDE.md
+.claude/
+docs/context.txt
+docs/work-orders.md

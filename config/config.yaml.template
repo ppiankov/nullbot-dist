@@ -1,0 +1,6 @@
+# nullbot configuration
+# Secrets are NEVER stored here — only env var names.
+
+workledger:
+  url: https://workledger.fly.dev/api/v1
+  api_key_env: WORKLEDGER_API_KEY
