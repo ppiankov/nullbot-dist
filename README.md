@@ -201,6 +201,25 @@ macOS does not support eBPF — enforcement is skipped silently. The userspace p
 | Linux | amd64 | Supported |
 | Linux | arm64 | Supported |
 
+## Known limitations
+
+Nullbot is structurally contained, not "safe." The enforcement stack prevents specific failure classes, not all failure classes.
+
+**What containment covers:**
+- Tool calls intercepted before execution (userspace policy gate)
+- 35 dangerous syscalls blocked at kernel level (seccomp)
+- Syscall-level observation of what the agent actually does (eBPF)
+- Agent cannot modify its own config or weaken its guard
+
+**What containment does NOT cover:**
+- **Logic errors** — the agent can still do wrong things within allowed operations (bad queries, wrong configs, misleading reports)
+- **Data exfiltration via allowed channels** — nullbot talks to Hiveram by design; seccomp blocks raw `connect`, but allowed API endpoints remain open
+- **Prompt injection via host output** — a compromised host can inject instructions into command output that the LLM classification step processes
+- **Binary replacement** — if someone replaces the chainwatch binary on disk, the systemd unit runs the replacement. No runtime integrity verification
+- **macOS** — no kernel-level enforcement; userspace policy gate only
+
+Containment reduces the blast radius. It does not eliminate risk. Deploy with the same operational discipline you would apply to any privileged automation.
+
 ## Prerequisites
 
 - A [Hiveram](https://hiveram.com) account (API key)
