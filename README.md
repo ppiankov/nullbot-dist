@@ -2,12 +2,21 @@
 
 Distribution package for **nullbot** — fleet observer that detects infrastructure problems and coordinates fixes through [Hiveram](https://hiveram.com). Ships with **chainwatch** policy gate because an unguarded agent is not a feature.
 
+Detect problems once. Fix them once. Across your entire fleet.
+
+## What this gives you
+
+Run one command. Get a fleet observer that:
+- detects problems across your infrastructure
+- prevents dangerous actions at kernel level
+- coordinates fixes automatically through Hiveram
+
 ## What this is
 
 Pre-built binaries and an install script that bootstraps any workstation with:
 - **nullbot** — observes hosts, runs 43 detection runbooks, creates work orders in Hiveram
-- **chainwatch** — policy gate that intercepts tool calls at irreversible boundaries
-- **pastewatch** — secret redaction that scans data before it leaves the host
+- **chainwatch** — policy gate that prevents irreversible actions by enforcing deterministic boundaries
+- **pastewatch** — data leakage prevention that strips secrets before they leave the host
 
 ```
   nullbot (observe) ──► chainwatch (guard) ──► Hiveram (coordinate)
@@ -208,7 +217,7 @@ macOS does not support eBPF — enforcement is skipped silently. The userspace p
 
 ## Known limitations
 
-Nullbot is structurally contained, not "safe." The enforcement stack prevents specific failure classes, not all failure classes.
+Nullbot is designed to reduce risk, not eliminate it. It is structurally contained, not "safe." The enforcement stack prevents specific failure classes, not all failure classes.
 
 **What containment covers:**
 - Tool calls intercepted before execution (userspace policy gate)
