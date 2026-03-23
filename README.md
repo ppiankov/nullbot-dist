@@ -54,7 +54,7 @@ The installer will:
 2. Install nullbot (fleet observer)
 3. Install pastewatch (secret redaction)
 4. Configure Hiveram connection (API URL + key)
-5. Optionally configure Groq API key for LLM-assisted observation
+5. Optionally configure LLM API key for assisted observation (any OpenAI-compatible provider)
 6. **On Linux**: set up eBPF/seccomp kernel-level enforcement (automatic)
 7. Verify everything works
 
@@ -245,7 +245,7 @@ Containment reduces the blast radius. It does not eliminate risk. Deploy with th
 ## Prerequisites
 
 - A [Hiveram](https://hiveram.com) account (API key)
-- Optional: [Groq](https://groq.com) API key for LLM-assisted observation
+- Optional: LLM API key (Groq, OpenAI, Anthropic, Azure, OpenRouter, or any OpenAI-compatible endpoint) for assisted observation
 
 ## License
 

@@ -232,29 +232,30 @@ EOF
     fi
 }
 
-# --- phase 4: groq (optional) ---
+# --- phase 4: LLM API key (optional) ---
 
-configure_groq() {
-    info "Phase 5: Groq API key (optional — for LLM-assisted observation)"
+configure_llm() {
+    info "Phase 4: LLM API key (optional — for assisted observation)"
     mkdir -p "$CONFIG_DIR"
 
-    local groq_file="${CONFIG_DIR}/groq.env"
+    local llm_file="${CONFIG_DIR}/llm.env"
 
-    if [ -f "$groq_file" ]; then
-        info "  Groq key already exists at ${groq_file}"
+    if [ -f "$llm_file" ]; then
+        info "  LLM key already exists at ${llm_file}"
         return
     fi
 
     echo ""
-    echo "Nullbot can use Groq for LLM-assisted observation."
+    echo "Nullbot can use any OpenAI-compatible LLM API for assisted observation."
+    echo "Supported: Groq, OpenAI, Anthropic, Azure, OpenRouter, or any compatible endpoint."
     echo "Without it, nullbot runs in deterministic-only mode (still useful)."
-    printf "Groq API key (press Enter to skip): "
-    read -r groq_key
+    printf "LLM API key (press Enter to skip): "
+    read -r llm_key
 
-    if [ -n "$groq_key" ]; then
-        echo "export GROQ_API_KEY='${groq_key}'" > "$groq_file"
-        chmod 600 "$groq_file"
-        info "  Groq key saved to ${groq_file}"
+    if [ -n "$llm_key" ]; then
+        echo "export NULLBOT_LLM_API_KEY='${llm_key}'" > "$llm_file"
+        chmod 600 "$llm_file"
+        info "  LLM key saved to ${llm_file}"
 
         # Add to shell profile
         local profile
@@ -267,10 +268,10 @@ configure_groq() {
         fi
 
         if [ -n "$profile" ]; then
-            local source_line='[ -f ~/.nullbot/groq.env ] && source ~/.nullbot/groq.env'
+            local source_line='[ -f ~/.nullbot/llm.env ] && source ~/.nullbot/llm.env'
             if ! grep -qF "$source_line" "$profile" 2>/dev/null; then
                 echo "$source_line" >> "$profile"
-                info "  Added groq source line to ${profile}"
+                info "  Added LLM source line to ${profile}"
             fi
         fi
     else
@@ -449,11 +450,11 @@ verify() {
         warn "  hiveram: not configured"
     fi
 
-    # groq
-    if [ -f "${CONFIG_DIR}/groq.env" ]; then
-        info "  groq: configured"
+    # llm
+    if [ -f "${CONFIG_DIR}/llm.env" ]; then
+        info "  llm: configured"
     else
-        info "  groq: not configured (deterministic-only mode)"
+        info "  llm: not configured (deterministic-only mode)"
     fi
 
     # enforcement (linux only)
@@ -503,7 +504,7 @@ main() {
     echo ""
     configure_nullbot
     echo ""
-    configure_groq
+    configure_llm
     echo ""
     setup_enforcement
     echo ""
