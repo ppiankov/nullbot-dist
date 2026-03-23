@@ -1,0 +1,27 @@
+[Unit]
+Description=chainwatch eBPF/seccomp enforcement for nullbot
+Documentation=https://github.com/ppiankov/nullbot-dist
+After=nullbot.service
+BindsTo=nullbot.service
+ConditionPathExists=/sys/kernel/btf/vmlinux
+
+[Service]
+Type=simple
+ExecStartPre=/bin/bash -c 'systemctl show nullbot.service --property=MainPID --value > /run/nullbot.pid'
+ExecStart=/bin/bash -c 'exec /usr/local/bin/chainwatch enforce --pid $(cat /run/nullbot.pid) --profile clawbot --fallback --audit-log /var/log/chainwatch/enforce.jsonl'
+ExecStartPost=/bin/rm -f /run/nullbot.pid
+Restart=on-failure
+RestartSec=10
+
+# eBPF requires elevated capabilities
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_DAC_READ_SEARCH
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log/chainwatch /sys/fs/bpf /run
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

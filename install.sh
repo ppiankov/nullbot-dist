@@ -226,10 +226,111 @@ configure_groq() {
     fi
 }
 
-# --- phase 5: verify ---
+# --- phase 5: ebpf enforcement (linux only) ---
+
+LOG_DIR="/var/log/chainwatch"
+
+has_ebpf_support() {
+    # macOS: no eBPF support
+    [ "$(uname -s)" = "Linux" ] || return 1
+    # Kernel must have BTF (eBPF CO-RE requirement)
+    [ -f /sys/kernel/btf/vmlinux ] || return 1
+    # Kernel version >= 5.8 (BPF ring buffer support)
+    local kver
+    kver=$(uname -r | cut -d. -f1-2)
+    local major minor
+    major=$(echo "$kver" | cut -d. -f1)
+    minor=$(echo "$kver" | cut -d. -f2)
+    [ "$major" -gt 5 ] || { [ "$major" -eq 5 ] && [ "$minor" -ge 8 ]; } || return 1
+    # systemd must be present
+    command -v systemctl &>/dev/null || return 1
+    return 0
+}
+
+setup_enforcement() {
+    info "Phase 5: eBPF/seccomp enforcement"
+
+    if [ "$(uname -s)" != "Linux" ]; then
+        return 0
+    fi
+
+    if ! has_ebpf_support; then
+        warn "  eBPF not available (need Linux ≥5.8 with BTF + systemd)"
+        warn "  Skipping enforcement — nullbot runs without kernel-level containment"
+        return 0
+    fi
+
+    info "  eBPF support detected (kernel $(uname -r), BTF present)"
+
+    # Create log directory
+    if [ ! -d "$LOG_DIR" ]; then
+        if [ -w /var/log ] || [ "$(id -u)" = "0" ]; then
+            mkdir -p "$LOG_DIR"
+        else
+            sudo mkdir -p "$LOG_DIR"
+        fi
+        info "  Created ${LOG_DIR}"
+    fi
+
+    # Install systemd units
+    local systemd_dir="/etc/systemd/system"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Determine source for config files (installer repo or inline)
+    local nullbot_svc="${script_dir}/config/nullbot.service"
+    local enforce_svc="${script_dir}/config/chainwatch-enforce.service"
+    local logrotate_cfg="${script_dir}/config/chainwatch-enforce.logrotate"
+
+    if [ -f "$nullbot_svc" ] && [ -f "$enforce_svc" ]; then
+        # Running from cloned repo
+        info "  Installing systemd units from config/"
+    else
+        # Running from curl pipe — download configs
+        info "  Downloading systemd unit files"
+        local tmpdir
+        tmpdir="$(mktemp -d)"
+        local base_url="https://raw.githubusercontent.com/${REPO}/main/config"
+        curl -fsSL -o "${tmpdir}/nullbot.service" "${base_url}/nullbot.service" || { warn "  Failed to download nullbot.service"; return 0; }
+        curl -fsSL -o "${tmpdir}/chainwatch-enforce.service" "${base_url}/chainwatch-enforce.service" || { warn "  Failed to download chainwatch-enforce.service"; return 0; }
+        curl -fsSL -o "${tmpdir}/chainwatch-enforce.logrotate" "${base_url}/chainwatch-enforce.logrotate" || { warn "  Failed to download logrotate config"; return 0; }
+        nullbot_svc="${tmpdir}/nullbot.service"
+        enforce_svc="${tmpdir}/chainwatch-enforce.service"
+        logrotate_cfg="${tmpdir}/chainwatch-enforce.logrotate"
+    fi
+
+    # Install units (needs root)
+    local sudo_prefix=""
+    if [ "$(id -u)" != "0" ]; then
+        sudo_prefix="sudo"
+    fi
+
+    $sudo_prefix cp "$nullbot_svc" "${systemd_dir}/nullbot.service"
+    $sudo_prefix cp "$enforce_svc" "${systemd_dir}/chainwatch-enforce.service"
+    info "  Installed nullbot.service and chainwatch-enforce.service"
+
+    # Install logrotate config
+    if [ -d /etc/logrotate.d ]; then
+        $sudo_prefix cp "$logrotate_cfg" /etc/logrotate.d/chainwatch-enforce
+        info "  Installed logrotate config"
+    fi
+
+    # Reload systemd
+    $sudo_prefix systemctl daemon-reload
+
+    # Enable services (don't start yet — nullbot config may not be complete)
+    $sudo_prefix systemctl enable nullbot.service 2>/dev/null || true
+    $sudo_prefix systemctl enable chainwatch-enforce.service 2>/dev/null || true
+    info "  Services enabled (start with: systemctl start nullbot)"
+
+    # Clean up temp files if used
+    [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
+}
+
+# --- phase 6: verify ---
 
 verify() {
-    info "Phase 5: Verifying installation"
+    info "Phase 6: Verifying installation"
     local ok=true
 
     # chainwatch
@@ -295,10 +396,31 @@ verify() {
         info "  groq: not configured (deterministic-only mode)"
     fi
 
+    # enforcement (linux only)
+    if [ "$(uname -s)" = "Linux" ] && command -v systemctl &>/dev/null; then
+        if systemctl is-enabled chainwatch-enforce.service &>/dev/null; then
+            info "  enforcement: enabled (chainwatch-enforce.service)"
+            if systemctl is-active chainwatch-enforce.service &>/dev/null; then
+                info "  enforcement: active"
+            else
+                info "  enforcement: not running (start with: systemctl start nullbot)"
+            fi
+        elif has_ebpf_support; then
+            warn "  enforcement: not installed (re-run installer to set up)"
+        else
+            info "  enforcement: not available (kernel lacks eBPF support)"
+        fi
+    fi
+
     echo ""
     if $ok; then
         info "Installation complete."
-        info "Open a new terminal, then run: nullbot pull --dry-run"
+        if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled nullbot.service &>/dev/null; then
+            info "Start services: systemctl start nullbot"
+            info "Enforcement starts automatically with nullbot."
+        else
+            info "Open a new terminal, then run: nullbot pull --dry-run"
+        fi
     else
         warn "Installation completed with warnings. Review the messages above."
     fi
@@ -320,6 +442,8 @@ main() {
     configure_nullbot
     echo ""
     configure_groq
+    echo ""
+    setup_enforcement
     echo ""
     verify
 }

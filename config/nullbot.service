@@ -1,0 +1,24 @@
+[Unit]
+Description=nullbot fleet observer
+Documentation=https://github.com/ppiankov/nullbot-dist
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nullbot daemon
+Restart=on-failure
+RestartSec=30
+EnvironmentFile=-/root/.workledger/api-key.env
+EnvironmentFile=-/root/.nullbot/groq.env
+WorkingDirectory=/tmp
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/tmp /var/log/chainwatch /root/.nullbot/state
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
