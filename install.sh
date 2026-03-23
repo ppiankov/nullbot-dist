@@ -106,10 +106,62 @@ install_nullbot() {
     rm -rf "$tmpdir"
 }
 
-# --- phase 3: nullbot config ---
+# --- phase 3: pastewatch ---
+
+PW_REPO="ppiankov/pastewatch"
+
+pastewatch_asset_name() {
+    local platform="$1"
+    case "$platform" in
+        darwin_arm64)  echo "pastewatch-cli" ;;
+        darwin_amd64)  echo "pastewatch-cli" ;;  # universal binary
+        linux_amd64)   echo "pastewatch-cli-linux-amd64" ;;
+        linux_arm64)   echo "" ;;  # not available yet
+        *)             echo "" ;;
+    esac
+}
+
+latest_pastewatch_version() {
+    local version
+    version=$(curl -fsSL "https://api.github.com/repos/${PW_REPO}/releases/latest" 2>/dev/null \
+        | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/' || true)
+    echo "$version"
+}
+
+install_pastewatch() {
+    info "Phase 3: Installing pastewatch (secret redaction)"
+
+    local platform asset_name pw_version tmpdir
+    platform="$(detect_platform)"
+    asset_name="$(pastewatch_asset_name "$platform")"
+
+    if [ -z "$asset_name" ]; then
+        warn "  pastewatch not available for ${platform} — skipping"
+        return 0
+    fi
+
+    pw_version="$(latest_pastewatch_version)"
+    if [ -z "$pw_version" ]; then
+        warn "  Could not determine pastewatch version — skipping"
+        return 0
+    fi
+
+    tmpdir="$(mktemp -d)"
+    local url="https://github.com/${PW_REPO}/releases/download/v${pw_version}/${asset_name}"
+
+    info "  Downloading pastewatch-cli v${pw_version} (${platform})"
+    curl -fsSL -o "${tmpdir}/pastewatch-cli" "$url" \
+        || { warn "  Download failed — skipping pastewatch"; rm -rf "$tmpdir"; return 0; }
+    chmod +x "${tmpdir}/pastewatch-cli"
+
+    install_binary "pastewatch-cli" "$tmpdir"
+    rm -rf "$tmpdir"
+}
+
+# --- phase 4: nullbot config ---
 
 configure_nullbot() {
-    info "Phase 3: Configuring nullbot"
+    info "Phase 4: Configuring nullbot"
     mkdir -p "$CONFIG_DIR"
 
     local config_file="${CONFIG_DIR}/config.yaml"
@@ -183,7 +235,7 @@ EOF
 # --- phase 4: groq (optional) ---
 
 configure_groq() {
-    info "Phase 4: Groq API key (optional — for LLM-assisted observation)"
+    info "Phase 5: Groq API key (optional — for LLM-assisted observation)"
     mkdir -p "$CONFIG_DIR"
 
     local groq_file="${CONFIG_DIR}/groq.env"
@@ -248,7 +300,7 @@ has_ebpf_support() {
 }
 
 setup_enforcement() {
-    info "Phase 5: eBPF/seccomp enforcement"
+    info "Phase 6: eBPF/seccomp enforcement"
 
     if [ "$(uname -s)" != "Linux" ]; then
         return 0
@@ -331,7 +383,7 @@ setup_enforcement() {
 # --- phase 6: verify ---
 
 verify() {
-    info "Phase 6: Verifying installation"
+    info "Phase 7: Verifying installation"
     local ok=true
 
     # chainwatch
@@ -350,6 +402,13 @@ verify() {
     else
         warn "  nullbot: not on PATH"
         ok=false
+    fi
+
+    # pastewatch
+    if command -v pastewatch-cli &>/dev/null; then
+        info "  pastewatch: installed"
+    else
+        info "  pastewatch: not installed (optional — secret redaction)"
     fi
 
     # chainwatch config
@@ -439,6 +498,8 @@ main() {
     install_chainwatch
     echo ""
     install_nullbot
+    echo ""
+    install_pastewatch
     echo ""
     configure_nullbot
     echo ""

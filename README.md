@@ -7,15 +7,16 @@ Distribution package for **nullbot** — fleet observer that detects infrastruct
 Pre-built binaries and an install script that bootstraps any workstation with:
 - **nullbot** — observes hosts, runs 43 detection runbooks, creates work orders in Hiveram
 - **chainwatch** — policy gate that intercepts tool calls at irreversible boundaries
+- **pastewatch** — secret redaction that scans data before it leaves the host
 
 ```
   nullbot (observe) ──► chainwatch (guard) ──► Hiveram (coordinate)
        │                      │                      │
   43 runbooks          allow/deny/approve      dedup + claims
   detect problems      enforce policy          one fix, not fifty
-                              │
-                     eBPF + seccomp (Linux)
-                     kernel-level containment
+       │                      │
+  pastewatch (redact)  eBPF + seccomp (Linux)
+  strip secrets        kernel-level containment
 ```
 
 ## What this is NOT
@@ -34,10 +35,11 @@ curl -fsSL https://raw.githubusercontent.com/ppiankov/nullbot-dist/main/install.
 The installer will:
 1. Install chainwatch (policy gate) and bootstrap policy config
 2. Install nullbot (fleet observer)
-3. Configure Hiveram connection (API URL + key)
-4. Optionally configure Groq API key for LLM-assisted observation
-5. **On Linux**: set up eBPF/seccomp kernel-level enforcement (automatic)
-6. Verify everything works
+3. Install pastewatch (secret redaction)
+4. Configure Hiveram connection (API URL + key)
+5. Optionally configure Groq API key for LLM-assisted observation
+6. **On Linux**: set up eBPF/seccomp kernel-level enforcement (automatic)
+7. Verify everything works
 
 ## Manual install
 
