@@ -116,7 +116,7 @@ pastewatch_asset_name() {
         darwin_arm64)  echo "pastewatch-cli" ;;
         darwin_amd64)  echo "pastewatch-cli" ;;  # universal binary
         linux_amd64)   echo "pastewatch-cli-linux-amd64" ;;
-        linux_arm64)   echo "" ;;  # not available yet
+        linux_arm64)   echo "pastewatch-cli-linux-arm64" ;;
         *)             echo "" ;;
     esac
 }
