@@ -242,6 +242,10 @@ Nullbot is designed to reduce risk, not eliminate it. It is structurally contain
 
 Containment reduces the blast radius. It does not eliminate risk. Deploy with the same operational discipline you would apply to any privileged automation.
 
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for the full protection stack diagram, data flow, startup order, and file locations.
+
 ## Prerequisites
 
 - A [Hiveram](https://hiveram.com) account (API key)

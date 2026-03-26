@@ -1,0 +1,29 @@
+[Unit]
+Description=pastewatch API proxy — scans and redacts secrets from outbound LLM requests
+Documentation=https://github.com/ppiankov/nullbot-dist
+Before=nullbot.service chainwatch-enforce.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pastewatch-cli proxy \
+    --port 8443 \
+    --upstream ${NULLBOT_LLM_UPSTREAM:-https://api.groq.com} \
+    --severity high \
+    --audit-log /var/log/pastewatch/proxy.jsonl \
+    --alert
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=-/root/.nullbot/llm.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log/pastewatch
+PrivateTmp=true
+WorkingDirectory=/tmp
+
+[Install]
+WantedBy=multi-user.target

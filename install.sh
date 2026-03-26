@@ -232,30 +232,61 @@ EOF
     fi
 }
 
-# --- phase 4: LLM API key (optional) ---
+# --- phase 4: LLM + pastewatch proxy ---
 
 configure_llm() {
-    info "Phase 4: LLM API key (optional — for assisted observation)"
+    info "Phase 4: LLM provider + pastewatch proxy (optional — for assisted observation)"
     mkdir -p "$CONFIG_DIR"
 
     local llm_file="${CONFIG_DIR}/llm.env"
 
     if [ -f "$llm_file" ]; then
-        info "  LLM key already exists at ${llm_file}"
+        info "  LLM config already exists at ${llm_file}"
         return
     fi
 
     echo ""
     echo "Nullbot can use any OpenAI-compatible LLM API for assisted observation."
     echo "Supported: Groq, OpenAI, Anthropic, Azure, OpenRouter, or any compatible endpoint."
+    echo "All LLM traffic is routed through pastewatch proxy for secret redaction."
     echo "Without it, nullbot runs in deterministic-only mode (still useful)."
     printf "LLM API key (press Enter to skip): "
     read -r llm_key
 
     if [ -n "$llm_key" ]; then
-        echo "export NULLBOT_LLM_API_KEY='${llm_key}'" > "$llm_file"
+        # Ask for upstream LLM URL
+        local default_upstream="https://api.groq.com"
+        echo ""
+        echo "Which LLM provider?"
+        echo "  1) Groq        (https://api.groq.com)"
+        echo "  2) OpenAI      (https://api.openai.com)"
+        echo "  3) Anthropic   (https://api.anthropic.com)"
+        echo "  4) OpenRouter  (https://openrouter.ai/api)"
+        echo "  5) Custom URL"
+        printf "Choice [1]: "
+        read -r llm_choice
+
+        local upstream_url
+        case "${llm_choice:-1}" in
+            1) upstream_url="https://api.groq.com" ;;
+            2) upstream_url="https://api.openai.com" ;;
+            3) upstream_url="https://api.anthropic.com" ;;
+            4) upstream_url="https://openrouter.ai/api" ;;
+            5)
+                printf "Custom upstream URL: "
+                read -r upstream_url
+                ;;
+            *) upstream_url="$default_upstream" ;;
+        esac
+
+        {
+            echo "export NULLBOT_LLM_API_KEY='${llm_key}'"
+            echo "export NULLBOT_LLM_UPSTREAM='${upstream_url}'"
+            echo "export NULLBOT_LLM_BASE_URL='http://127.0.0.1:8443'"
+        } > "$llm_file"
         chmod 600 "$llm_file"
         info "  LLM key saved to ${llm_file}"
+        info "  Upstream: ${upstream_url} (via pastewatch proxy on :8443)"
 
         # Add to shell profile
         local profile
@@ -277,6 +308,70 @@ configure_llm() {
     else
         info "  Skipped — nullbot will run in deterministic-only mode"
     fi
+}
+
+# --- phase 4b: pastewatch proxy systemd (linux) ---
+
+setup_pastewatch_proxy() {
+    if [ "$(uname -s)" != "Linux" ]; then
+        return 0
+    fi
+
+    if ! command -v pastewatch-cli &>/dev/null; then
+        return 0
+    fi
+
+    if ! command -v systemctl &>/dev/null; then
+        return 0
+    fi
+
+    # Only set up if LLM is configured
+    if [ ! -f "${CONFIG_DIR}/llm.env" ]; then
+        return 0
+    fi
+
+    info "  Setting up pastewatch proxy service"
+
+    local systemd_dir="/etc/systemd/system"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    local proxy_svc="${script_dir}/config/pastewatch-proxy.service"
+    local proxy_logrotate="${script_dir}/config/pastewatch-proxy.logrotate"
+
+    if [ ! -f "$proxy_svc" ]; then
+        local tmpdir
+        tmpdir="$(mktemp -d)"
+        local base_url="https://raw.githubusercontent.com/${REPO}/main/config"
+        curl -fsSL -o "${tmpdir}/pastewatch-proxy.service" "${base_url}/pastewatch-proxy.service" || { warn "  Failed to download pastewatch-proxy.service"; return 0; }
+        curl -fsSL -o "${tmpdir}/pastewatch-proxy.logrotate" "${base_url}/pastewatch-proxy.logrotate" || true
+        proxy_svc="${tmpdir}/pastewatch-proxy.service"
+        proxy_logrotate="${tmpdir}/pastewatch-proxy.logrotate"
+    fi
+
+    local sudo_prefix=""
+    if [ "$(id -u)" != "0" ]; then
+        sudo_prefix="sudo"
+    fi
+
+    # Create log directory
+    if [ ! -d /var/log/pastewatch ]; then
+        $sudo_prefix mkdir -p /var/log/pastewatch
+        info "  Created /var/log/pastewatch"
+    fi
+
+    $sudo_prefix cp "$proxy_svc" "${systemd_dir}/pastewatch-proxy.service"
+    info "  Installed pastewatch-proxy.service"
+
+    if [ -d /etc/logrotate.d ] && [ -f "$proxy_logrotate" ]; then
+        $sudo_prefix cp "$proxy_logrotate" /etc/logrotate.d/pastewatch-proxy
+    fi
+
+    $sudo_prefix systemctl daemon-reload
+    $sudo_prefix systemctl enable pastewatch-proxy.service 2>/dev/null || true
+    info "  pastewatch proxy enabled (starts before nullbot)"
+
+    [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
 }
 
 # --- phase 5: ebpf enforcement (linux only) ---
@@ -450,9 +545,16 @@ verify() {
         warn "  hiveram: not configured"
     fi
 
-    # llm
+    # llm + proxy
     if [ -f "${CONFIG_DIR}/llm.env" ]; then
         info "  llm: configured"
+        if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled pastewatch-proxy.service &>/dev/null 2>&1; then
+            info "  pastewatch proxy: enabled (outbound LLM traffic scanned)"
+        elif command -v pastewatch-cli &>/dev/null; then
+            info "  pastewatch proxy: available (start manually: pastewatch-cli proxy)"
+        else
+            warn "  pastewatch proxy: not available (LLM traffic unscanned)"
+        fi
     else
         info "  llm: not configured (deterministic-only mode)"
     fi
@@ -505,6 +607,7 @@ main() {
     configure_nullbot
     echo ""
     configure_llm
+    setup_pastewatch_proxy
     echo ""
     setup_enforcement
     echo ""

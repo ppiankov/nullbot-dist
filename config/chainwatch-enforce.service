@@ -1,8 +1,8 @@
 [Unit]
 Description=nullbot under chainwatch seccomp/eBPF enforcement
 Documentation=https://github.com/ppiankov/nullbot-dist
-After=network-online.target
-Wants=network-online.target
+After=network-online.target pastewatch-proxy.service
+Wants=network-online.target pastewatch-proxy.service
 ConditionPathExists=/sys/kernel/btf/vmlinux
 
 [Service]
@@ -15,7 +15,9 @@ ExecStart=/usr/local/bin/chainwatch enforce \
 Restart=on-failure
 RestartSec=30
 EnvironmentFile=-/root/.workledger/api-key.env
-EnvironmentFile=-/root/.nullbot/groq.env
+EnvironmentFile=-/root/.nullbot/llm.env
+# Route LLM traffic through pastewatch proxy for secret redaction
+Environment=NULLBOT_LLM_BASE_URL=http://127.0.0.1:8443
 
 # eBPF requires elevated capabilities
 AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE

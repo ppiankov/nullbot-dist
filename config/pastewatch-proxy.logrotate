@@ -1,0 +1,9 @@
+/var/log/pastewatch/proxy.jsonl {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
