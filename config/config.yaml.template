@@ -1,14 +1,16 @@
 # nullbot configuration
 # Secrets are NEVER stored here — only env var names.
+# ALL outbound traffic routes through pastewatch proxies for secret redaction.
 
 workledger:
-  url: https://workledger.fly.dev/api/v1
+  # Hiveram traffic routed through pastewatch proxy on :8444
+  # Proxy scans WO payloads (titles, notes, runbook output) for secrets
+  url: http://127.0.0.1:8444/api/v1
   api_key_env: WORKLEDGER_API_KEY
 
 llm:
-  # LLM traffic is routed through pastewatch proxy (localhost:8443)
-  # which scans and redacts secrets before forwarding to the upstream provider.
-  # The proxy is configured in pastewatch-proxy.service.
+  # LLM traffic routed through pastewatch proxy on :8443
+  # Proxy scans request/response bodies for secrets before reaching the provider
   base_url: http://127.0.0.1:8443
   api_key_env: NULLBOT_LLM_API_KEY
   # Upstream provider (set in pastewatch-proxy.service via NULLBOT_LLM_UPSTREAM)

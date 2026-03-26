@@ -361,15 +361,31 @@ setup_pastewatch_proxy() {
     fi
 
     $sudo_prefix cp "$proxy_svc" "${systemd_dir}/pastewatch-proxy.service"
-    info "  Installed pastewatch-proxy.service"
+    info "  Installed pastewatch-proxy.service (LLM traffic on :8443)"
 
-    if [ -d /etc/logrotate.d ] && [ -f "$proxy_logrotate" ]; then
-        $sudo_prefix cp "$proxy_logrotate" /etc/logrotate.d/pastewatch-proxy
+    # Hiveram proxy — scans WO payloads for secrets before reaching workledger
+    local hiveram_svc="${script_dir}/config/pastewatch-hiveram.service"
+    local hiveram_logrotate="${script_dir}/config/pastewatch-hiveram.logrotate"
+    if [ ! -f "$hiveram_svc" ]; then
+        curl -fsSL -o "${tmpdir}/pastewatch-hiveram.service" "${base_url}/pastewatch-hiveram.service" || true
+        curl -fsSL -o "${tmpdir}/pastewatch-hiveram.logrotate" "${base_url}/pastewatch-hiveram.logrotate" || true
+        hiveram_svc="${tmpdir}/pastewatch-hiveram.service"
+        hiveram_logrotate="${tmpdir}/pastewatch-hiveram.logrotate"
+    fi
+    if [ -f "$hiveram_svc" ]; then
+        $sudo_prefix cp "$hiveram_svc" "${systemd_dir}/pastewatch-hiveram.service"
+        info "  Installed pastewatch-hiveram.service (Hiveram traffic on :8444)"
+    fi
+
+    if [ -d /etc/logrotate.d ]; then
+        [ -f "$proxy_logrotate" ] && $sudo_prefix cp "$proxy_logrotate" /etc/logrotate.d/pastewatch-proxy
+        [ -f "$hiveram_logrotate" ] && $sudo_prefix cp "$hiveram_logrotate" /etc/logrotate.d/pastewatch-hiveram
     fi
 
     $sudo_prefix systemctl daemon-reload
     $sudo_prefix systemctl enable pastewatch-proxy.service 2>/dev/null || true
-    info "  pastewatch proxy enabled (starts before nullbot)"
+    $sudo_prefix systemctl enable pastewatch-hiveram.service 2>/dev/null || true
+    info "  Both pastewatch proxies enabled (start before nullbot)"
 
     [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
 }
@@ -476,10 +492,44 @@ setup_enforcement() {
     [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
 }
 
-# --- phase 6: verify ---
+# --- phase 7: lock binaries (linux) ---
+
+lock_binaries() {
+    if [ "$(uname -s)" != "Linux" ]; then
+        return 0
+    fi
+
+    if ! command -v chattr &>/dev/null; then
+        return 0
+    fi
+
+    info "Phase 7: Locking binaries (immutable flag)"
+
+    local sudo_prefix=""
+    if [ "$(id -u)" != "0" ]; then
+        sudo_prefix="sudo"
+    fi
+
+    local locked=0
+    for bin in chainwatch nullbot pastewatch-cli; do
+        local path="${INSTALL_DIR}/${bin}"
+        if [ -f "$path" ]; then
+            $sudo_prefix chattr +i "$path" 2>/dev/null && locked=$((locked + 1)) || true
+        fi
+    done
+
+    if [ "$locked" -gt 0 ]; then
+        info "  Locked ${locked} binaries with immutable flag"
+        info "  To update: chattr -i /usr/local/bin/{chainwatch,nullbot,pastewatch-cli}"
+    else
+        warn "  Could not set immutable flag (filesystem may not support it)"
+    fi
+}
+
+# --- phase 8: verify ---
 
 verify() {
-    info "Phase 7: Verifying installation"
+    info "Phase 8: Verifying installation"
     local ok=true
 
     # chainwatch
@@ -549,11 +599,14 @@ verify() {
     if [ -f "${CONFIG_DIR}/llm.env" ]; then
         info "  llm: configured"
         if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled pastewatch-proxy.service &>/dev/null 2>&1; then
-            info "  pastewatch proxy: enabled (outbound LLM traffic scanned)"
+            info "  pastewatch LLM proxy: enabled (:8443)"
         elif command -v pastewatch-cli &>/dev/null; then
-            info "  pastewatch proxy: available (start manually: pastewatch-cli proxy)"
+            info "  pastewatch LLM proxy: available (start manually)"
         else
-            warn "  pastewatch proxy: not available (LLM traffic unscanned)"
+            warn "  pastewatch LLM proxy: not available (LLM traffic unscanned)"
+        fi
+        if [ "$(uname -s)" = "Linux" ] && systemctl is-enabled pastewatch-hiveram.service &>/dev/null 2>&1; then
+            info "  pastewatch Hiveram proxy: enabled (:8444)"
         fi
     else
         info "  llm: not configured (deterministic-only mode)"
@@ -572,6 +625,21 @@ verify() {
             warn "  enforcement: not installed (re-run installer to set up)"
         else
             info "  enforcement: not available (kernel lacks eBPF support)"
+        fi
+    fi
+
+    # binary integrity (linux)
+    if [ "$(uname -s)" = "Linux" ] && command -v lsattr &>/dev/null; then
+        local immutable_count=0
+        for bin in chainwatch nullbot pastewatch-cli; do
+            if lsattr "${INSTALL_DIR}/${bin}" 2>/dev/null | grep -q 'i'; then
+                immutable_count=$((immutable_count + 1))
+            fi
+        done
+        if [ "$immutable_count" -gt 0 ]; then
+            info "  binary integrity: ${immutable_count} binaries locked (immutable)"
+        else
+            warn "  binary integrity: binaries not locked (run: chattr +i /usr/local/bin/{chainwatch,nullbot,pastewatch-cli})"
         fi
     fi
 
@@ -610,6 +678,8 @@ main() {
     setup_pastewatch_proxy
     echo ""
     setup_enforcement
+    echo ""
+    lock_binaries
     echo ""
     verify
 }

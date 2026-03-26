@@ -1,0 +1,29 @@
+[Unit]
+Description=pastewatch API proxy — scans nullbot WO payloads before reaching Hiveram
+Documentation=https://github.com/ppiankov/nullbot-dist
+Before=nullbot.service chainwatch-enforce.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/root/.nullbot/llm.env
+ExecStart=/usr/local/bin/pastewatch-cli proxy \
+    --port 8444 \
+    --upstream https://workledger.fly.dev \
+    --severity high \
+    --audit-log /var/log/pastewatch/hiveram.jsonl \
+    --alert
+Restart=on-failure
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log/pastewatch
+PrivateTmp=true
+WorkingDirectory=/tmp
+
+[Install]
+WantedBy=multi-user.target

@@ -1,8 +1,8 @@
 [Unit]
 Description=nullbot fleet observer
 Documentation=https://github.com/ppiankov/nullbot-dist
-After=network-online.target pastewatch-proxy.service
-Wants=network-online.target pastewatch-proxy.service
+After=network-online.target pastewatch-proxy.service pastewatch-hiveram.service
+Wants=network-online.target pastewatch-proxy.service pastewatch-hiveram.service
 
 [Service]
 Type=simple
@@ -11,8 +11,10 @@ Restart=on-failure
 RestartSec=30
 EnvironmentFile=-/root/.workledger/api-key.env
 EnvironmentFile=-/root/.nullbot/llm.env
-# Route LLM traffic through pastewatch proxy for secret redaction
+# Route ALL outbound traffic through pastewatch proxies for secret redaction
+# LLM traffic → :8443, Hiveram traffic → :8444
 Environment=NULLBOT_LLM_BASE_URL=http://127.0.0.1:8443
+Environment=WORKLEDGER_URL=http://127.0.0.1:8444
 WorkingDirectory=/tmp
 
 # Security hardening
