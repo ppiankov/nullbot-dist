@@ -247,9 +247,10 @@ Nullbot is designed to reduce risk, not eliminate it. It is structurally contain
 
 Containment reduces the blast radius. It does not eliminate risk. Deploy with the same operational discipline you would apply to any privileged automation.
 
-## Architecture
+## Docs
 
-See [docs/architecture.md](docs/architecture.md) for the full 7-layer protection stack diagram, zero-trust data flow, "what cannot happen" table, startup order, and file locations.
+- **[Quickstart](docs/quickstart.md)** — install, start, verify in 3 commands
+- **[Architecture](docs/architecture.md)** — 7-layer protection stack, zero-trust data flow, "what cannot happen" table
 
 ## Prerequisites
 
