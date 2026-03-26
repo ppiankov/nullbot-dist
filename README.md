@@ -52,11 +52,13 @@ curl -fsSL https://raw.githubusercontent.com/ppiankov/nullbot-dist/main/install.
 The installer will:
 1. Install chainwatch (policy gate) and bootstrap policy config
 2. Install nullbot (fleet observer)
-3. Install pastewatch (secret redaction)
+3. Install pastewatch (secret redaction + API proxy)
 4. Configure Hiveram connection (API URL + key)
-5. Optionally configure LLM API key for assisted observation (any OpenAI-compatible provider)
-6. **On Linux**: set up eBPF/seccomp kernel-level enforcement (automatic)
-7. Verify everything works
+5. Configure LLM provider + pastewatch proxy (optional — for assisted observation)
+6. **On Linux**: set up pastewatch dual proxies (LLM on :8443, Hiveram on :8444)
+7. **On Linux**: set up eBPF/seccomp kernel-level enforcement
+8. **On Linux**: lock binaries with immutable flag (`chattr +i`)
+9. Verify full stack
 
 ## Manual install
 
@@ -231,20 +233,22 @@ Nullbot is designed to reduce risk, not eliminate it. It is structurally contain
 - Tool calls intercepted before execution (userspace policy gate)
 - 35 dangerous syscalls blocked at kernel level (seccomp)
 - Syscall-level observation of what the agent actually does (eBPF)
+- ALL outbound LLM traffic scanned for secrets (pastewatch proxy :8443)
+- ALL outbound Hiveram traffic scanned for secrets (pastewatch proxy :8444)
+- Binaries locked with immutable flag — cannot be replaced without explicit unlock
 - Agent cannot modify its own config or weaken its guard
+- Agent cannot bypass proxies — URLs hardcoded to localhost by systemd
 
 **What containment does NOT cover:**
 - **Logic errors** — the agent can still do wrong things within allowed operations (bad queries, wrong configs, misleading reports)
-- **Data exfiltration via allowed channels** — nullbot talks to Hiveram by design; seccomp blocks raw `connect`, but allowed API endpoints remain open
-- **Prompt injection via host output** — a compromised host can inject instructions into command output that the LLM classification step processes
-- **Binary replacement** — if someone replaces the chainwatch binary on disk, the systemd unit runs the replacement. No runtime integrity verification
-- **macOS** — no kernel-level enforcement; userspace policy gate only
+- **Prompt injection via host output** — a compromised host can inject instructions into command output that the LLM classification step processes. Mitigated by: deterministic runbooks first, LLM is assistive not authoritative, seccomp blocks acting on injected instructions
+- **macOS** — no kernel-level enforcement, no proxies, no immutable flag; userspace policy gate only
 
 Containment reduces the blast radius. It does not eliminate risk. Deploy with the same operational discipline you would apply to any privileged automation.
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) for the full protection stack diagram, data flow, startup order, and file locations.
+See [docs/architecture.md](docs/architecture.md) for the full 7-layer protection stack diagram, zero-trust data flow, "what cannot happen" table, startup order, and file locations.
 
 ## Prerequisites
 
