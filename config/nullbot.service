@@ -6,6 +6,9 @@ Wants=network-online.target pastewatch-proxy.service pastewatch-hiveram.service
 
 [Service]
 Type=simple
+# Wait for proxies to be ready before starting nullbot
+ExecStartPre=/bin/sh -c 'for i in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8443 2>/dev/null && break || sleep 1; done'
+ExecStartPre=/bin/sh -c 'for i in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8444 2>/dev/null && break || sleep 1; done'
 ExecStart=/usr/local/bin/nullbot daemon
 Restart=on-failure
 RestartSec=30

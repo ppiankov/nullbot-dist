@@ -171,22 +171,38 @@ configure_nullbot() {
         return
     fi
 
-    # Hiveram URL
-    local hiveram_url="https://workledger.fly.dev/api/v1"
+    # Hiveram URL — ask for the real upstream, store both real and proxy URLs
+    local hiveram_url="https://workledger.fly.dev"
     echo ""
-    echo "Enter Hiveram API URL (press Enter for default)."
+    echo "Enter Hiveram base URL (press Enter for default)."
+    echo "This is the upstream — traffic will route through pastewatch proxy."
     printf "URL [${hiveram_url}]: "
     read -r custom_url
     if [ -n "$custom_url" ]; then
         hiveram_url="$custom_url"
     fi
 
+    # Store upstream URL for pastewatch-hiveram.service to use
+    echo "export NULLBOT_HIVERAM_UPSTREAM='${hiveram_url}'" >> "${CONFIG_DIR}/hiveram.env"
+    chmod 600 "${CONFIG_DIR}/hiveram.env"
+
+    # Config always points through proxy on Linux, direct on macOS
+    local config_url
+    if [ "$(uname -s)" = "Linux" ]; then
+        config_url="http://127.0.0.1:8444/api/v1"
+    else
+        config_url="${hiveram_url}/api/v1"
+    fi
+
     cat > "$config_file" << EOF
 workledger:
-  url: ${hiveram_url}
+  url: ${config_url}
   api_key_env: WORKLEDGER_API_KEY
 EOF
     info "  Config written to ${config_file}"
+    if [ "$(uname -s)" = "Linux" ]; then
+        info "  Hiveram routed through proxy :8444 → ${hiveram_url}"
+    fi
 
     # Workledger API key
     mkdir -p "$WL_CONFIG_DIR"

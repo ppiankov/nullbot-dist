@@ -7,13 +7,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/root/.nullbot/llm.env
-ExecStart=/usr/local/bin/pastewatch-cli proxy \
+# Default upstream; overridden by NULLBOT_HIVERAM_UPSTREAM in hiveram.env
+Environment=NULLBOT_HIVERAM_UPSTREAM=https://workledger.fly.dev
+EnvironmentFile=-/root/.nullbot/hiveram.env
+ExecStart=/bin/sh -c 'exec /usr/local/bin/pastewatch-cli proxy \
     --port 8444 \
-    --upstream https://workledger.fly.dev \
+    --upstream "$NULLBOT_HIVERAM_UPSTREAM" \
     --severity high \
     --audit-log /var/log/pastewatch/hiveram.jsonl \
-    --alert
+    --alert'
 Restart=on-failure
 RestartSec=10
 
