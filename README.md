@@ -53,12 +53,13 @@ The installer will:
 1. Install chainwatch (policy gate) and bootstrap policy config
 2. Install nullbot (fleet observer)
 3. Install pastewatch (secret redaction + API proxy)
-4. Configure Hiveram connection (API URL + key)
-5. Configure LLM provider + pastewatch proxy (optional — for assisted observation)
-6. **On Linux**: set up pastewatch dual proxies (LLM on :8443, Hiveram on :8444)
-7. **On Linux**: set up eBPF/seccomp kernel-level enforcement
-8. **On Linux**: lock binaries with immutable flag (`chattr +i`)
-9. Verify full stack
+4. **Select host profile** (ClickHouse, AWS infra, Kubernetes, web server, database, etc.)
+5. Configure Hiveram connection (API URL + key)
+6. Configure LLM provider + pastewatch proxy (optional — for assisted observation)
+7. **On Linux**: set up pastewatch dual proxies (LLM on :8443, Hiveram on :8444)
+8. **On Linux**: set up eBPF/seccomp kernel-level enforcement
+9. **On Linux**: lock binaries with immutable flag (`chattr +i`)
+10. Verify full stack
 
 ## Manual install
 

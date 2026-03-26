@@ -158,10 +158,75 @@ install_pastewatch() {
     rm -rf "$tmpdir"
 }
 
-# --- phase 4: nullbot config ---
+# --- phase 4: host profile ---
+
+configure_profile() {
+    info "Phase 4: Host profile"
+    mkdir -p "$CONFIG_DIR"
+
+    local profile_file="${CONFIG_DIR}/profile.env"
+
+    if [ -f "$profile_file" ]; then
+        info "  Profile already exists at ${profile_file}"
+        return
+    fi
+
+    echo ""
+    echo "What kind of host is this?"
+    echo "  1) ClickHouse server    (runbooks: clickhouse, linux, storage, memory-pressure)"
+    echo "  2) AWS infra host       (runbooks: cloud-infra, awsspectre, iamspectre, s3spectre, rdsspectre, cost-anomaly)"
+    echo "  3) Kubernetes node      (runbooks: kubernetes, kubespectre, k8s-utilization, prometheus)"
+    echo "  4) Web server           (runbooks: nginx, wordpress, linux, network)"
+    echo "  5) Database server      (runbooks: pgspectre, mysql, redisspectre, mongospectre)"
+    echo "  6) Mail server          (runbooks: postfix, postfix-inbound, dnsspectre)"
+    echo "  7) General Linux        (runbooks: linux, storage, network, systemd-health)"
+    echo "  8) Security audit       (runbooks: all spectre runbooks)"
+    echo "  9) Custom               (you choose runbooks)"
+    printf "Choice [7]: "
+    read -r profile_choice
+
+    local profile_name runbook_types
+    case "${profile_choice:-7}" in
+        1) profile_name="clickhouse"
+           runbook_types="clickhouse,clickhouse_config,clickspectre,linux,storage,memory-pressure" ;;
+        2) profile_name="aws-infra"
+           runbook_types="cloud-infra,awsspectre,iamspectre,s3spectre,ecrspectre,rdsspectre,cost-anomaly,idle-resources,reserved-capacity,spend-breakdown,aws-billing" ;;
+        3) profile_name="kubernetes"
+           runbook_types="kubernetes,kubespectre,k8s-utilization,prometheus,network" ;;
+        4) profile_name="webserver"
+           runbook_types="nginx,wordpress,linux,network,systemd-health" ;;
+        5) profile_name="database"
+           runbook_types="pgspectre,mysql,redisspectre,mongospectre,linux,storage" ;;
+        6) profile_name="mailserver"
+           runbook_types="postfix,postfix-inbound,dnsspectre,linux,network" ;;
+        7) profile_name="general"
+           runbook_types="linux,storage,network,systemd-health,memory-pressure" ;;
+        8) profile_name="security-audit"
+           runbook_types="awsspectre,azurespectre,gcpspectre,gcsspectre,s3spectre,iamspectre,ecrspectre,rdsspectre,kubespectre,clickspectre,pgspectre,redisspectre,mongospectre,elasticspectre,kafkaspectre,logspectre,vaultspectre,dnsspectre,cispectre,snowspectre,aispectre" ;;
+        9) profile_name="custom"
+           echo ""
+           echo "Available runbooks:"
+           "${INSTALL_DIR}/nullbot" runbooks 2>/dev/null || echo "  (run 'nullbot runbooks' after install to see list)"
+           printf "Comma-separated runbook types: "
+           read -r runbook_types
+           ;;
+        *) profile_name="general"
+           runbook_types="linux,storage,network,systemd-health,memory-pressure" ;;
+    esac
+
+    {
+        echo "export NULLBOT_PROFILE='${profile_name}'"
+        echo "export NULLBOT_RUNBOOK_TYPES='${runbook_types}'"
+    } > "$profile_file"
+    chmod 600 "$profile_file"
+    info "  Profile: ${profile_name}"
+    info "  Runbooks: ${runbook_types}"
+}
+
+# --- phase 5: nullbot config ---
 
 configure_nullbot() {
-    info "Phase 4: Configuring nullbot"
+    info "Phase 5: Configuring nullbot"
     mkdir -p "$CONFIG_DIR"
 
     local config_file="${CONFIG_DIR}/config.yaml"
@@ -248,10 +313,10 @@ EOF
     fi
 }
 
-# --- phase 4: LLM + pastewatch proxy ---
+# --- phase 6: LLM + pastewatch proxy ---
 
 configure_llm() {
-    info "Phase 4: LLM provider + pastewatch proxy (optional — for assisted observation)"
+    info "Phase 6: LLM provider + pastewatch proxy (optional — for assisted observation)"
     mkdir -p "$CONFIG_DIR"
 
     local llm_file="${CONFIG_DIR}/llm.env"
@@ -326,7 +391,7 @@ configure_llm() {
     fi
 }
 
-# --- phase 4b: pastewatch proxy systemd (linux) ---
+# --- phase 6b: pastewatch proxy systemd (linux) ---
 
 setup_pastewatch_proxy() {
     if [ "$(uname -s)" != "Linux" ]; then
@@ -406,7 +471,7 @@ setup_pastewatch_proxy() {
     [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
 }
 
-# --- phase 5: ebpf enforcement (linux only) ---
+# --- phase 7: ebpf enforcement (linux only) ---
 
 LOG_DIR="/var/log/chainwatch"
 
@@ -428,7 +493,7 @@ has_ebpf_support() {
 }
 
 setup_enforcement() {
-    info "Phase 6: eBPF/seccomp enforcement"
+    info "Phase 7: eBPF/seccomp enforcement"
 
     if [ "$(uname -s)" != "Linux" ]; then
         return 0
@@ -508,7 +573,7 @@ setup_enforcement() {
     [ -n "${tmpdir:-}" ] && rm -rf "$tmpdir"
 }
 
-# --- phase 7: lock binaries (linux) ---
+# --- phase 8: lock binaries (linux) ---
 
 lock_binaries() {
     if [ "$(uname -s)" != "Linux" ]; then
@@ -519,7 +584,7 @@ lock_binaries() {
         return 0
     fi
 
-    info "Phase 7: Locking binaries (immutable flag)"
+    info "Phase 8: Locking binaries (immutable flag)"
 
     local sudo_prefix=""
     if [ "$(id -u)" != "0" ]; then
@@ -542,10 +607,10 @@ lock_binaries() {
     fi
 }
 
-# --- phase 8: verify ---
+# --- phase 9: verify ---
 
 verify() {
-    info "Phase 8: Verifying installation"
+    info "Phase 9: Verifying installation"
     local ok=true
 
     # chainwatch
@@ -579,6 +644,15 @@ verify() {
     else
         warn "  chainwatch config: not initialized"
         ok=false
+    fi
+
+    # profile
+    if [ -f "${CONFIG_DIR}/profile.env" ]; then
+        # shellcheck disable=SC1091
+        source "${CONFIG_DIR}/profile.env" 2>/dev/null || true
+        info "  profile: ${NULLBOT_PROFILE:-unknown} (${NULLBOT_RUNBOOK_TYPES:-none})"
+    else
+        warn "  profile: not configured"
     fi
 
     # nullbot config
@@ -687,6 +761,8 @@ main() {
     install_nullbot
     echo ""
     install_pastewatch
+    echo ""
+    configure_profile
     echo ""
     configure_nullbot
     echo ""
