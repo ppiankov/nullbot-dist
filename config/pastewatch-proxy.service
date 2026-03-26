@@ -7,15 +7,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pastewatch-cli proxy \
+# Default upstream; overridden by NULLBOT_LLM_UPSTREAM in llm.env
+Environment=NULLBOT_LLM_UPSTREAM=https://api.groq.com
+EnvironmentFile=-/root/.nullbot/llm.env
+ExecStart=/bin/sh -c 'exec /usr/local/bin/pastewatch-cli proxy \
     --port 8443 \
-    --upstream ${NULLBOT_LLM_UPSTREAM:-https://api.groq.com} \
+    --upstream "$NULLBOT_LLM_UPSTREAM" \
     --severity high \
     --audit-log /var/log/pastewatch/proxy.jsonl \
-    --alert
+    --alert'
 Restart=on-failure
 RestartSec=10
-EnvironmentFile=-/root/.nullbot/llm.env
 
 # Security hardening
 NoNewPrivileges=true
